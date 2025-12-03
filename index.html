@@ -165,6 +165,12 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
+        /* Estilos para parágrafos */
+        p.reader-paragraph {
+            margin: 0 0 1.5rem 0;
+            text-align: justify;
+        }
+
         /* Loading Overlay */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -309,30 +315,60 @@
         readerContent.innerHTML = '';
         wordsArray = [];
         currentIndex = 0;
+        
+        // --- NOVA LÓGICA DE PARÁGRAFOS ---
+        // Divide o texto por quebras de linha (\n)
+        const paragraphs = text.split(/\n/);
+        
+        let wordGlobalIndex = 0; // Contador global de palavras para sincronia
 
-        // Renderiza palavras
-        const words = text.split(/\s+/);
-        words.forEach((w, i) => {
-            if (!w.trim()) return;
-            const span = document.createElement('span');
-            span.innerText = w + " ";
-            span.className = 'word';
-            span.onclick = () => manualSync(i); // Clique para ajustar
-            readerContent.appendChild(span);
+        paragraphs.forEach(paragraph => {
+            // Se o parágrafo for vazio, adiciona um espaço visual
+            if (!paragraph.trim()) {
+                const spacer = document.createElement('div');
+                spacer.style.height = '1rem'; // Altura de uma linha em branco
+                readerContent.appendChild(spacer);
+                return;
+            }
+
+            // Cria o elemento de parágrafo HTML
+            const pElement = document.createElement('p');
+            pElement.className = 'reader-paragraph';
+
+            // Divide as palavras dentro deste parágrafo
+            const words = paragraph.split(/\s+/);
             
-            wordsArray.push({
-                el: span,
-                clean: w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
+            words.forEach(w => {
+                if (!w.trim()) return;
+                
+                const span = document.createElement('span');
+                span.innerText = w + " ";
+                span.className = 'word';
+                
+                // Closure para capturar o índice correto no loop
+                const thisIndex = wordGlobalIndex; 
+                span.onclick = () => manualSync(thisIndex);
+                
+                pElement.appendChild(span);
+                
+                // Adiciona ao array linear para a lógica de áudio
+                wordsArray.push({
+                    el: span,
+                    clean: w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
+                });
+                
+                wordGlobalIndex++;
             });
+
+            readerContent.appendChild(pElement);
         });
+        // ---------------------------------
 
         // Transição de tela
         screenSetup.style.display = 'none';
         screenReader.classList.add('active');
         
         // Tenta iniciar
-        // No mobile, fullscreen e audio geralmente precisam de um toque do usuário.
-        // Como o usuário já clicou em "Ler" ou "Upload", tentamos aproveitar esse gesto.
         toggleFullScreen(true); 
         
         // Auto-start do microfone com pequeno delay
@@ -372,7 +408,11 @@
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
-                fullText += content.items.map(item => item.str).join(' ') + " \n\n ";
+                
+                // Tenta preservar quebras de linha se o PDF informar (hasEOL), senão usa espaço
+                // Adiciona \n\n ao final da página para garantir parágrafo novo entre páginas
+                const pageText = content.items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('');
+                fullText += pageText + "\n\n";
             }
 
             loadingOverlay.style.display = 'none';
