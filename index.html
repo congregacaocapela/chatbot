@@ -103,10 +103,28 @@
 
         #screen-reader.active { display: flex; animation: slideUp 0.3s ease; }
 
+        /* Cronômetro Discreto */
+        #reading-timer {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: rgba(241, 245, 249, 0.8);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: #64748b;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums; /* Números alinhados */
+            z-index: 10002;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
         /* Área do texto */
         #reader-content {
             flex: 1;
-            padding: 25px 20px 100px 20px; /* Padding bottom grande para o menu flutuante */
+            padding: 45px 20px 100px 20px; /* Mais padding top por causa do timer */
             overflow-y: auto;
             font-size: 1.3rem; /* Letra maior para mobile */
             line-height: 1.8;
@@ -215,6 +233,9 @@
 
     <!-- TELA 2: LEITURA (IMERSIVA) -->
     <div id="screen-reader">
+        <!-- Cronômetro -->
+        <div id="reading-timer"><i class="far fa-clock"></i> 00:00</div>
+
         <div id="reader-content">
             <!-- O texto aparecerá aqui -->
         </div>
@@ -256,6 +277,7 @@
     const btnToggleMic = document.getElementById('btn-toggle-mic');
     const btnFullscreen = document.getElementById('btn-fullscreen');
     const btnExit = document.getElementById('btn-exit');
+    const timerDisplay = document.getElementById('reading-timer');
     
     // Estado
     let recognition;
@@ -263,6 +285,40 @@
     let wordsArray = [];
     let currentIndex = 0;
     let restartTimer = null;
+    
+    // Estado do Cronômetro
+    let timerInterval = null;
+    let secondsElapsed = 0;
+
+    // --- LÓGICA DO CRONÔMETRO ---
+    function startTimer() {
+        if (timerInterval) return; // Já está rodando
+        timerInterval = setInterval(() => {
+            secondsElapsed++;
+            updateTimerDisplay();
+        }, 1000);
+        timerDisplay.style.color = 'var(--primary)'; // Cor ativa
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        timerDisplay.style.color = '#64748b'; // Cor pausada
+    }
+
+    function resetTimer() {
+        stopTimer();
+        secondsElapsed = 0;
+        updateTimerDisplay();
+    }
+
+    function updateTimerDisplay() {
+        const mins = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+        const secs = (secondsElapsed % 60).toString().padStart(2, '0');
+        timerDisplay.innerHTML = `<i class="far fa-clock"></i> ${mins}:${secs}`;
+    }
 
     // --- SETUP DO RECONHECIMENTO DE VOZ ---
     function initSpeech() {
@@ -281,15 +337,18 @@
             isListening = true;
             btnToggleMic.innerHTML = '<i class="fas fa-pause"></i>';
             btnToggleMic.style.backgroundColor = '#ef4444'; // Vermelho para parar
+            startTimer(); // Inicia o tempo quando a voz começa
         };
 
         rec.onend = () => {
             isListening = false;
             if (restartTimer) { // Reinício automático se não foi manual
                  try { rec.start(); } catch(e){}
+                 // Não paramos o cronômetro aqui pois é um reinício técnico
             } else {
                 btnToggleMic.innerHTML = '<i class="fas fa-microphone"></i>';
                 btnToggleMic.style.backgroundColor = ''; // Volta ao padrão
+                stopTimer(); // Pausa o tempo se o usuário parou
             }
         };
 
@@ -303,7 +362,7 @@
 
     recognition = initSpeech();
 
-    // --- LISTENERS DOS BOTÕES (CORREÇÃO AQUI) ---
+    // --- LISTENERS DOS BOTÕES ---
     btnToggleMic.addEventListener('click', toggleMic);
     btnFullscreen.addEventListener('click', () => toggleFullScreen());
     btnExit.addEventListener('click', exitReaderMode);
@@ -315,27 +374,23 @@
         readerContent.innerHTML = '';
         wordsArray = [];
         currentIndex = 0;
+        resetTimer(); // Zera o cronômetro para nova leitura
         
         // --- NOVA LÓGICA DE PARÁGRAFOS ---
-        // Divide o texto por quebras de linha (\n)
         const paragraphs = text.split(/\n/);
-        
-        let wordGlobalIndex = 0; // Contador global de palavras para sincronia
+        let wordGlobalIndex = 0; 
 
         paragraphs.forEach(paragraph => {
-            // Se o parágrafo for vazio, adiciona um espaço visual
             if (!paragraph.trim()) {
                 const spacer = document.createElement('div');
-                spacer.style.height = '1rem'; // Altura de uma linha em branco
+                spacer.style.height = '1rem'; 
                 readerContent.appendChild(spacer);
                 return;
             }
 
-            // Cria o elemento de parágrafo HTML
             const pElement = document.createElement('p');
             pElement.className = 'reader-paragraph';
 
-            // Divide as palavras dentro deste parágrafo
             const words = paragraph.split(/\s+/);
             
             words.forEach(w => {
@@ -345,13 +400,11 @@
                 span.innerText = w + " ";
                 span.className = 'word';
                 
-                // Closure para capturar o índice correto no loop
                 const thisIndex = wordGlobalIndex; 
                 span.onclick = () => manualSync(thisIndex);
                 
                 pElement.appendChild(span);
                 
-                // Adiciona ao array linear para a lógica de áudio
                 wordsArray.push({
                     el: span,
                     clean: w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
@@ -362,13 +415,11 @@
 
             readerContent.appendChild(pElement);
         });
-        // ---------------------------------
 
         // Transição de tela
         screenSetup.style.display = 'none';
         screenReader.classList.add('active');
         
-        // Tenta iniciar
         toggleFullScreen(true); 
         
         // Auto-start do microfone com pequeno delay
@@ -379,10 +430,10 @@
 
     function exitReaderMode() {
         stopMic();
+        resetTimer(); // Limpa o tempo ao sair
         if (document.fullscreenElement) document.exitFullscreen();
         screenReader.classList.remove('active');
         screenSetup.style.display = 'flex';
-        // Reseta texto colado para não ficar velho
         document.getElementById('text-input').value = '';
     }
 
@@ -408,9 +459,6 @@
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
-                
-                // Tenta preservar quebras de linha se o PDF informar (hasEOL), senão usa espaço
-                // Adiciona \n\n ao final da página para garantir parágrafo novo entre páginas
                 const pageText = content.items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('');
                 fullText += pageText + "\n\n";
             }
@@ -432,7 +480,6 @@
         const cleanSpoken = spokenWords.map(w => w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, ""));
         const searchLimit = Math.min(currentIndex + 40, wordsArray.length);
 
-        // Estratégia: Procura sequência de 2 palavras (muito preciso)
         if (cleanSpoken.length >= 2) {
             const s1 = cleanSpoken[cleanSpoken.length - 2];
             const s2 = cleanSpoken[cleanSpoken.length - 1];
@@ -445,7 +492,6 @@
             }
         }
 
-        // Fallback: Procura palavra única (se for longa > 3 chars)
         const last = cleanSpoken[cleanSpoken.length - 1];
         if (last && last.length > 3) {
             for (let i = currentIndex; i < searchLimit; i++) {
@@ -458,7 +504,6 @@
     }
 
     function updatePos(index) {
-        // Marca anteriores como lidos
         for (let i = currentIndex; i <= index; i++) {
             wordsArray[i].el.classList.add('read');
             wordsArray[i].el.classList.remove('current');
@@ -476,15 +521,11 @@
     }
 
     function manualSync(index) {
-        // Permite clicar na palavra para forçar a posição
         document.querySelectorAll('.current').forEach(e => e.classList.remove('current'));
         
-        // Se voltar no texto, remove o 'read' das palavras futuras
         if (index < currentIndex) {
             for(let i = index; i < currentIndex; i++) wordsArray[i].el.classList.remove('read');
-        }
-        // Se avançar, adiciona 'read'
-        else {
+        } else {
              for(let i = currentIndex; i < index; i++) wordsArray[i].el.classList.add('read');
         }
 
@@ -497,14 +538,14 @@
         if (!recognition) return;
         if (isListening) stopMic();
         else {
-            restartTimer = true; // Flag para auto-restart se cair
+            restartTimer = true; 
             recognition.start();
         }
     }
 
     function stopMic() {
         if (recognition) {
-            restartTimer = null; // Cancela auto-restart
+            restartTimer = null; 
             recognition.stop();
         }
     }
@@ -512,7 +553,6 @@
     function toggleFullScreen(forceOn = false) {
         const elem = document.documentElement;
         
-        // Tenta encontrar a função correta (alguns navegadores usam prefixos)
         const requestFS = elem.requestFullscreen || 
                           elem.webkitRequestFullscreen || 
                           elem.msRequestFullscreen;
@@ -532,7 +572,6 @@
         }
     }
 
-    // Evita que a tela apague (Wake Lock API - funciona em Android/Chrome)
     if ('wakeLock' in navigator) {
         let wakeLock = null;
         const requestWakeLock = async () => {
