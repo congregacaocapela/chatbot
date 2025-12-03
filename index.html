@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor de PDF Inteligente</title>
+    <!-- Carregando PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- Ícones -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --bg: #f3f4f6;
+            --text: #1f2937;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #111827;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 0.9rem;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .btn-upload { background-color: white; color: var(--text); border: 1px solid #d1d5db; }
+        .btn-upload:hover:not(:disabled) { background-color: #f9fafb; }
+
+        .btn-start { background-color: var(--success); color: white; }
+        .btn-start:hover:not(:disabled) { background-color: #16a34a; }
+
+        .btn-stop { background-color: var(--danger); color: white; }
+        .btn-stop:hover:not(:disabled) { background-color: #dc2626; }
+
+        .status-bar {
+            text-align: center;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            min-height: 20px;
+            color: #4b5563;
+        }
+
+        .status-error { color: var(--danger); font-weight: bold; }
+        .status-active { color: var(--primary); font-weight: bold; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        /* Container do Texto */
+        #reader-container {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            overflow-y: auto;
+            position: relative;
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+
+        .pdf-content {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: #374151;
+            white-space: pre-wrap;
+        }
+
+        /* Estados das palavras */
+        .word {
+            cursor: pointer;
+            padding: 2px 0;
+            border-radius: 2px;
+            transition: background-color 0.2s;
+        }
+
+        .word:hover {
+            background-color: #e5e7eb;
+            text-decoration: underline;
+        }
+
+        .word.read {
+            color: #059669; /* Verde escuro */
+            opacity: 0.7;
+        }
+
+        .word.current {
+            background-color: #fcd34d; /* Amarelo destaque */
+            color: black;
+            font-weight: bold;
+            padding: 2px 4px;
+            border-radius: 4px;
+            box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.5);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #9ca3af;
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Leitor Inteligente</h1>
+        <p>Carregue um PDF e leia em voz alta. O sistema acompanhará você.</p>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="file-input" accept="application/pdf" style="display: none;">
+        <button class="btn-upload" onclick="document.getElementById('file-input').click()">
+            <i class="fas fa-file-pdf"></i> Carregar PDF
+        </button>
+        <button id="btn-start" class="btn-start" disabled>
+            <i class="fas fa-microphone"></i> Iniciar Leitura
+        </button>
+        <button id="btn-stop" class="btn-stop" disabled>
+            <i class="fas fa-stop"></i> Parar
+        </button>
+    </div>
+
+    <div id="status-bar" class="status-bar">Aguardando arquivo...</div>
+
+    <div id="reader-container">
+        <div id="text-display" class="pdf-content">
+            <div class="empty-state">
+                <i class="fas fa-book-open"></i>
+                <p>Nenhum PDF carregado.<br>Selecione um arquivo para começar.</p>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // Configuração do Worker do PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    // Elementos DOM
+    const fileInput = document.getElementById('file-input');
+    const textDisplay = document.getElementById('text-display');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const statusBar = document.getElementById('status-bar');
+
+    // Variáveis de Estado
+    let recognition;
+    let isListening = false;
+    let wordsArray = []; 
+    let currentIndex = 0;
+    let restartTimer = null; // Timer para evitar loop infinito de erros
+
+    // --- LÓGICA DE RECONHECIMENTO DE VOZ (Web Speech API) ---
+    function setupRecognition() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            statusBar.innerHTML = "<span class='status-error'>Seu navegador não suporta reconhecimento de voz. Use o Chrome ou Edge.</span>";
+            return null;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new SpeechRecognition();
+        
+        rec.lang = 'pt-BR';
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.maxAlternatives = 1;
+
+        rec.onstart = () => {
+            isListening = true;
+            updateUIState(true);
+            statusBar.innerHTML = "<span class='status-active'>🎤 Ouvindo... Pode começar a ler!</span>";
+        };
+
+        rec.onend = () => {
+            isListening = false;
+            // Se parou mas o usuário não clicou em parar, tenta reiniciar (tratamento para 'no-speech')
+            if (btnStop.disabled === false) { 
+                // Pequeno delay para não travar o navegador se falhar muito rápido
+                restartTimer = setTimeout(() => {
+                    try { rec.start(); } catch(e) {}
+                }, 1000);
+            } else {
+                updateUIState(false);
+                statusBar.innerText = "Leitura pausada.";
+            }
+        };
+
+        rec.onresult = (event) => {
+            const resultIndex = event.resultIndex;
+            const transcript = event.results[resultIndex][0].transcript.toLowerCase().trim();
+            
+            // Processa a fala
+            const spokenWords = transcript.split(/\s+/);
+            matchText(spokenWords);
+        };
+
+        rec.onerror = (event) => {
+            console.warn("Erro de reconhecimento:", event.error);
+            
+            if (event.error === 'no-speech') {
+                statusBar.innerText = "Nenhuma fala detectada. Tentando ouvir novamente...";
+                // O onend será chamado e tentará reiniciar
+            } else if (event.error === 'not-allowed') {
+                statusBar.innerHTML = "<span class='status-error'>❌ Permissão de microfone negada.</span>";
+                stopRecognition();
+            } else {
+                statusBar.innerText = "Erro: " + event.error;
+            }
+        };
+
+        return rec;
+    }
+
+    // Inicializa o reconhecimento
+    recognition = setupRecognition();
+
+    // --- MANIPULAÇÃO DO PDF ---
+    fileInput.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        statusBar.innerText = "Processando PDF... (Isso pode levar alguns segundos)";
+        textDisplay.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Extraindo texto...</p></div>';
+        
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            let fullText = "";
+            
+            // Extrai página por página para manter ordem
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                // Melhoria na junção de palavras (trata hífens e quebras)
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + "\n\n";
+            }
+
+            renderText(fullText);
+            statusBar.innerText = "Pronto! Clique em 'Iniciar Leitura'.";
+            btnStart.disabled = false;
+
+        } catch (err) {
+            console.error(err);
+            statusBar.innerHTML = "<span class='status-error'>Erro ao ler o arquivo PDF. Tente outro arquivo.</span>";
+            textDisplay.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Erro no arquivo.</p></div>';
+        }
+    });
+
+    // --- RENDERIZAÇÃO DO TEXTO NA TELA ---
+    function renderText(text) {
+        textDisplay.innerHTML = '';
+        wordsArray = [];
+        currentIndex = 0;
+
+        // Limpeza básica e divisão por espaços
+        const words = text.split(/\s+/);
+
+        words.forEach((word, index) => {
+            if (!word.trim()) return; // Ignora espaços vazios
+
+            const span = document.createElement('span');
+            span.innerText = word + " ";
+            span.className = "word";
+            span.id = `w-${index}`;
+            
+            // Evento de clique para correção manual
+            span.onclick = () => manualSync(index);
+
+            textDisplay.appendChild(span);
+
+            // Armazena versão limpa para comparação
+            wordsArray.push({
+                element: span,
+                // Remove pontuação para facilitar o match (ex: "casa." vira "casa")
+                cleanWord: word.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g,"")
+            });
+        });
+    }
+
+    // --- SINCRONIZAÇÃO (MATCHING) ---
+    function matchText(spokenWords) {
+        const lastSpoken = spokenWords[spokenWords.length - 1];
+        if (!lastSpoken || lastSpoken.length < 2) return; // Ignora palavras muito curtas ou vazias
+
+        // Janela de busca: Procura a palavra falada nas próximas 30 palavras
+        // Isso evita falsos positivos muito longe no texto
+        const searchRange = 30;
+        const limit = Math.min(currentIndex + searchRange, wordsArray.length);
+
+        for (let i = currentIndex; i < limit; i++) {
+            const pdfWord = wordsArray[i].cleanWord;
+
+            // Lógica de "Fuzzy Match" simples (se contiver a palavra)
+            // Ex: Falou "amigo", texto é "amigos" -> Aceita
+            if (pdfWord && (pdfWord === lastSpoken || pdfWord.includes(lastSpoken) || lastSpoken.includes(pdfWord))) {
+                updatePosition(i);
+                break;
+            }
+        }
+    }
+
+    function updatePosition(newIndex) {
+        // Marca todas as palavras anteriores como lidas
+        for (let j = currentIndex; j <= newIndex; j++) {
+            wordsArray[j].element.classList.add('read');
+            wordsArray[j].element.classList.remove('current');
+        }
+
+        // Atualiza índice atual
+        currentIndex = newIndex + 1;
+
+        // Marca a próxima palavra como alvo atual (opcional, visualmente agradável)
+        if (currentIndex < wordsArray.length) {
+            const currentEl = wordsArray[currentIndex].element;
+            currentEl.classList.add('current');
+            
+            // Scroll suave automático
+            currentEl.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
+            });
+        }
+    }
+
+    // --- CORREÇÃO MANUAL (CLIQUE) ---
+    function manualSync(index) {
+        if (!isListening && !btnStart.disabled) {
+            // Se não estiver ouvindo, apenas move o marcador
+            statusBar.innerText = "Posição ajustada manualmente.";
+        }
+        // Ajusta tudo até o clique
+        // Remove classes "current" antigas
+        document.querySelectorAll('.word.current').forEach(el => el.classList.remove('current'));
+        
+        // Reseta estados se clicou para trás
+        if (index < currentIndex) {
+             for (let i = index; i < currentIndex; i++) {
+                wordsArray[i].element.classList.remove('read');
+             }
+        }
+        
+        currentIndex = index;
+        updatePosition(index - 1); // -1 porque updatePosition avança +1
+    }
+
+    // --- CONTROLES DA UI ---
+    function updateUIState(listening) {
+        btnStart.disabled = listening;
+        btnStop.disabled = !listening;
+        fileInput.disabled = listening;
+    }
+
+    function stopRecognition() {
+        if (recognition) recognition.stop();
+        clearTimeout(restartTimer);
+        isListening = false;
+        updateUIState(false);
+    }
+
+    btnStart.addEventListener('click', () => {
+        if (recognition) {
+            try {
+                recognition.start();
+            } catch (e) {
+                console.log("Já iniciado ou erro de estado:", e);
+            }
+        }
+    });
+
+    btnStop.addEventListener('click', () => {
+        stopRecognition();
+    });
+
+</script>
+</body>
+</html>
