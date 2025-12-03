@@ -215,15 +215,18 @@
 
         <!-- Controles Flutuantes -->
         <div class="reader-controls">
-            <button class="ctrl-btn" onclick="exitReaderMode()" title="Sair">
+            <!-- Botão Sair -->
+            <button class="ctrl-btn" id="btn-exit" title="Sair">
                 <i class="fas fa-arrow-left"></i>
             </button>
             
+            <!-- Botão Microfone -->
             <button class="ctrl-btn main-action" id="btn-toggle-mic">
                 <i class="fas fa-microphone"></i>
             </button>
 
-            <button class="ctrl-btn" onclick="toggleFullScreen()" title="Tela Cheia">
+            <!-- Botão Tela Cheia -->
+            <button class="ctrl-btn" id="btn-fullscreen" title="Tela Cheia">
                 <i class="fas fa-expand"></i>
             </button>
         </div>
@@ -245,6 +248,8 @@
     const readerContent = document.getElementById('reader-content');
     const loadingOverlay = document.getElementById('loading-overlay');
     const btnToggleMic = document.getElementById('btn-toggle-mic');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    const btnExit = document.getElementById('btn-exit');
     
     // Estado
     let recognition;
@@ -292,6 +297,12 @@
 
     recognition = initSpeech();
 
+    // --- LISTENERS DOS BOTÕES (CORREÇÃO AQUI) ---
+    btnToggleMic.addEventListener('click', toggleMic);
+    btnFullscreen.addEventListener('click', () => toggleFullScreen());
+    btnExit.addEventListener('click', exitReaderMode);
+
+
     // --- CONTROLE DE MODO LEITURA ---
     function enterReaderMode(text) {
         // Limpa e prepara
@@ -319,11 +330,15 @@
         screenSetup.style.display = 'none';
         screenReader.classList.add('active');
         
-        // Tenta tela cheia automática (pode ser bloqueado pelo navegador)
-        toggleFullScreen(true);
-
-        // Auto-start do microfone após 1 segundo
-        setTimeout(() => toggleMic(), 500);
+        // Tenta iniciar
+        // No mobile, fullscreen e audio geralmente precisam de um toque do usuário.
+        // Como o usuário já clicou em "Ler" ou "Upload", tentamos aproveitar esse gesto.
+        toggleFullScreen(true); 
+        
+        // Auto-start do microfone com pequeno delay
+        setTimeout(() => {
+            if (!isListening) toggleMic();
+        }, 800);
     }
 
     function exitReaderMode() {
@@ -455,10 +470,25 @@
     }
 
     function toggleFullScreen(forceOn = false) {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(e => console.log("Fullscreen bloqueado sem interação"));
+        const elem = document.documentElement;
+        
+        // Tenta encontrar a função correta (alguns navegadores usam prefixos)
+        const requestFS = elem.requestFullscreen || 
+                          elem.webkitRequestFullscreen || 
+                          elem.msRequestFullscreen;
+
+        const exitFS = document.exitFullscreen || 
+                       document.webkitExitFullscreen || 
+                       document.msExitFullscreen;
+
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (requestFS) {
+                requestFS.call(elem).catch(err => {
+                    console.log("Fullscreen bloqueado ou não suportado neste momento.", err);
+                });
+            }
         } else if (!forceOn) {
-            document.exitFullscreen();
+            if (exitFS) exitFS.call(document);
         }
     }
 
