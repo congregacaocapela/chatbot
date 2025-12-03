@@ -55,19 +55,31 @@
             text-align: center;
         }
 
-        textarea {
+        /* Área de input editável (substitui textarea) */
+        #rich-input {
             width: 100%;
-            height: 120px;
+            height: 150px;
             border: 2px solid #e2e8f0;
             border-radius: 12px;
             padding: 12px;
             font-size: 1rem;
-            resize: none;
+            overflow-y: auto;
             margin-bottom: 15px;
-            font-family: inherit;
+            text-align: left;
+            background: #fff;
+            white-space: pre-wrap;
+            outline: none;
         }
 
-        textarea:focus { outline: none; border-color: var(--primary); }
+        #rich-input:focus { border-color: var(--primary); }
+        
+        /* Placeholder simulado via CSS */
+        #rich-input:empty:before {
+            content: attr(placeholder);
+            color: #94a3b8;
+            pointer-events: none;
+            display: block; /* Garante que apareça */
+        }
 
         .btn-large {
             width: 100%;
@@ -172,16 +184,27 @@
         .ctrl-btn.main-action { background: var(--primary); box-shadow: 0 0 15px rgba(79, 70, 229, 0.5); transform: scale(1.1); }
 
         /* Estilos do Texto */
-        .word { padding: 2px 1px; border-radius: 4px; cursor: pointer; }
+        .word { 
+            padding: 2px 1px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            display: inline-block; /* Melhora renderização de highlights */
+        }
         .word.read { color: var(--read-color); }
         .word.current { 
             background-color: var(--highlight); 
             color: black; 
             font-weight: 700; 
-            padding: 4px 6px;
+            padding: 2px 4px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
+        /* Suporte a formatação visual */
+        b, strong { font-weight: 700; color: #0f172a; }
+        i, em { font-style: italic; color: #334155; }
+        u { text-decoration: underline; text-decoration-color: var(--primary); }
+        mark { background-color: #fce7f3; color: inherit; padding: 0 2px; border-radius: 2px; }
 
         /* Estilos para parágrafos */
         p.reader-paragraph {
@@ -210,7 +233,7 @@
     <!-- TELA 1: SETUP (INICIAL) -->
     <div id="screen-setup">
         <h1>Leitor Zen 🎧</h1>
-        <p class="subtitle">Cole um texto ou envie um PDF para começar.</p>
+        <p class="subtitle">Cole um texto formatado ou envie um PDF.</p>
 
         <!-- Opção 1: PDF -->
         <div class="card-option">
@@ -222,9 +245,10 @@
 
         <div style="text-align: center; margin: 10px 0; color: #cbd5e1;">OU</div>
 
-        <!-- Opção 2: Colar Texto -->
+        <!-- Opção 2: Colar Texto (Agora suporta Rich Text) -->
         <div class="card-option">
-            <textarea id="text-input" placeholder="Cole seu texto aqui..."></textarea>
+            <!-- Usamos contenteditable div em vez de textarea para suportar HTML/Rich Text -->
+            <div id="rich-input" contenteditable="true" placeholder="Cole seu texto com negrito ou itálico aqui..."></div>
             <button class="btn-large" id="btn-start-text">
                 <i class="fas fa-book-open"></i> Ler Texto Colado
             </button>
@@ -278,6 +302,7 @@
     const btnFullscreen = document.getElementById('btn-fullscreen');
     const btnExit = document.getElementById('btn-exit');
     const timerDisplay = document.getElementById('reading-timer');
+    const richInput = document.getElementById('rich-input');
     
     // Estado
     let recognition;
@@ -368,52 +393,88 @@
     btnExit.addEventListener('click', exitReaderMode);
 
 
+    // --- PROCESSAMENTO INTELIGENTE DE NÓS DOM ---
+    // Esta função percorre o HTML mantendo tags como <b>, <i>, etc., 
+    // mas envolve cada palavra em um <span> clicável para o leitor.
+    function processNodeForWords(node) {
+        if (node.nodeType === 3) { // Nó de Texto
+            const text = node.nodeValue;
+            if (!text.trim()) return document.createTextNode(text); // Mantém espaços
+            
+            const fragment = document.createDocumentFragment();
+            // Divide mantendo os separadores para reconstrução fiel
+            const parts = text.split(/(\s+)/); 
+            
+            parts.forEach(part => {
+                if (part.trim()) {
+                    const span = document.createElement('span');
+                    span.className = 'word';
+                    span.innerText = part;
+                    fragment.appendChild(span);
+                } else {
+                    fragment.appendChild(document.createTextNode(part));
+                }
+            });
+            return fragment;
+        }
+        
+        // Se for um Elemento (b, i, div, p, etc.)
+        const copy = node.cloneNode(false); // Clona a tag sem filhos
+        node.childNodes.forEach(child => {
+            copy.appendChild(processNodeForWords(child)); // Recursão
+        });
+        return copy;
+    }
+
+
     // --- CONTROLE DE MODO LEITURA ---
-    function enterReaderMode(text) {
+    function enterReaderMode(htmlContent) {
         // Limpa e prepara
         readerContent.innerHTML = '';
         wordsArray = [];
         currentIndex = 0;
-        resetTimer(); // Zera o cronômetro para nova leitura
+        resetTimer(); 
         
-        // --- NOVA LÓGICA DE PARÁGRAFOS ---
-        const paragraphs = text.split(/\n/);
-        let wordGlobalIndex = 0; 
+        // Cria um container temporário para processar o HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
 
-        paragraphs.forEach(paragraph => {
-            if (!paragraph.trim()) {
-                const spacer = document.createElement('div');
-                spacer.style.height = '1rem'; 
-                readerContent.appendChild(spacer);
-                return;
+        // Processa cada nó filho preservando a estrutura
+        const fragment = document.createDocumentFragment();
+        
+        // Se o conteúdo não tiver tags de bloco (p, div), envolvemos em <p>
+        // Isso ajuda com textos simples colados
+        let hasBlocks = Array.from(tempDiv.children).some(c => ['P','DIV','H1','H2','H3','LI'].includes(c.tagName));
+        
+        if (!hasBlocks) {
+            // Divide por quebras de linha manuais se for texto plano ou HTML simples
+            // Mas se for HTML rico colado, geralmente já vem com divs ou ps
+            const p = document.createElement('p');
+            p.className = 'reader-paragraph';
+            // Movemos todo o conteúdo para dentro de um P processado
+            while (tempDiv.firstChild) {
+                p.appendChild(processNodeForWords(tempDiv.firstChild));
             }
-
-            const pElement = document.createElement('p');
-            pElement.className = 'reader-paragraph';
-
-            const words = paragraph.split(/\s+/);
-            
-            words.forEach(w => {
-                if (!w.trim()) return;
-                
-                const span = document.createElement('span');
-                span.innerText = w + " ";
-                span.className = 'word';
-                
-                const thisIndex = wordGlobalIndex; 
-                span.onclick = () => manualSync(thisIndex);
-                
-                pElement.appendChild(span);
-                
-                wordsArray.push({
-                    el: span,
-                    clean: w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
-                });
-                
-                wordGlobalIndex++;
+            fragment.appendChild(p);
+        } else {
+            // Processa estrutura existente
+            Array.from(tempDiv.childNodes).forEach(child => {
+                 // Adiciona classe de parágrafo para estilização se for P
+                if (child.tagName === 'P') child.classList.add('reader-paragraph');
+                fragment.appendChild(processNodeForWords(child));
             });
+        }
 
-            readerContent.appendChild(pElement);
+        readerContent.appendChild(fragment);
+
+        // Agora reconstruímos o array linear de palavras para a lógica de áudio
+        const wordElements = readerContent.querySelectorAll('.word');
+        wordElements.forEach((el, index) => {
+            el.onclick = () => manualSync(index);
+            wordsArray.push({
+                el: el,
+                clean: el.innerText.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
+            });
         });
 
         // Transição de tela
@@ -422,7 +483,7 @@
         
         toggleFullScreen(true); 
         
-        // Auto-start do microfone com pequeno delay
+        // Auto-start do microfone
         setTimeout(() => {
             if (!isListening) toggleMic();
         }, 800);
@@ -430,18 +491,19 @@
 
     function exitReaderMode() {
         stopMic();
-        resetTimer(); // Limpa o tempo ao sair
+        resetTimer(); 
         if (document.fullscreenElement) document.exitFullscreen();
         screenReader.classList.remove('active');
         screenSetup.style.display = 'flex';
-        document.getElementById('text-input').value = '';
+        richInput.innerHTML = ''; // Limpa o input
     }
 
-    // --- ENTRADA 1: TEXTO COLADO ---
+    // --- ENTRADA 1: TEXTO COLADO (RICH TEXT) ---
     document.getElementById('btn-start-text').addEventListener('click', () => {
-        const text = document.getElementById('text-input').value;
-        if (text.length < 5) return alert("Digite ou cole um texto maior.");
-        enterReaderMode(text);
+        const html = richInput.innerHTML;
+        const textCheck = richInput.innerText;
+        if (textCheck.length < 2) return alert("Digite ou cole um texto maior.");
+        enterReaderMode(html); // Passa o HTML cru
     });
 
     // --- ENTRADA 2: UPLOAD PDF ---
@@ -454,17 +516,24 @@
         try {
             const buffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(buffer).promise;
-            let fullText = "";
+            let fullHtml = "";
 
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
-                const pageText = content.items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('');
-                fullText += pageText + "\n\n";
+                
+                // Constrói HTML simples com parágrafos para o PDF
+                let pageHtml = "<p class='reader-paragraph'>";
+                // Tenta reconstruir parágrafos baseados em quebras de linha
+                content.items.forEach(item => {
+                    pageHtml += item.str + (item.hasEOL ? "<br>" : " ");
+                });
+                pageHtml += "</p>";
+                fullHtml += pageHtml;
             }
 
             loadingOverlay.style.display = 'none';
-            enterReaderMode(fullText);
+            enterReaderMode(fullHtml); // Passa HTML gerado
 
         } catch (err) {
             loadingOverlay.style.display = 'none';
@@ -487,7 +556,6 @@
         const prevSpoken = cleanSpoken.length > 1 ? cleanSpoken[cleanSpoken.length - 2] : null;
 
         // 1. PRIORIDADE MÁXIMA: Verifica a PRÓXIMA palavra imediata
-        // Isso garante fluidez. Se o usuário falar o que é esperado, avança instantaneamente.
         if (currentIndex < wordsArray.length) {
             const nextWord = wordsArray[currentIndex].clean;
             if (nextWord === lastSpoken) {
@@ -496,10 +564,7 @@
             }
         }
 
-        // Se não for a imediata, procura com regras rígidas:
-
-        // 2. BUSCA POR SEQUÊNCIA (Segura - Permite "pulos" curtos se for uma frase)
-        // Procura nos próximos 50 termos, mas SÓ aceita se encontrar PAR de palavras.
+        // 2. BUSCA POR SEQUÊNCIA (Segura)
         const seqLimit = Math.min(currentIndex + 50, wordsArray.length);
         if (prevSpoken && lastSpoken) {
             for (let i = currentIndex; i < seqLimit - 1; i++) {
@@ -510,12 +575,8 @@
             }
         }
 
-        // 3. BUSCA POR PALAVRA ÚNICA (Rigorosa - Evita pulos acidentais)
-        // Só aceita pular por palavra única se:
-        // A) A palavra for longa (> 4 letras)
-        // B) Estiver MUITO PERTO (no máximo 10 palavras à frente)
+        // 3. BUSCA POR PALAVRA ÚNICA (Rigorosa)
         const singleLimit = Math.min(currentIndex + 10, wordsArray.length);
-        
         if (lastSpoken && lastSpoken.length > 4) {
             for (let i = currentIndex; i < singleLimit; i++) {
                 if (wordsArray[i].clean === lastSpoken) {
