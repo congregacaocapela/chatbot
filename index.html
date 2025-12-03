@@ -509,54 +509,62 @@
 
     // --- CONTROLE DE MODO LEITURA ---
     function enterReaderMode(htmlContent) {
-        // Limpa e prepara
-        readerContent.innerHTML = '';
-        wordsArray = [];
-        currentIndex = 0;
-        resetTimer(); 
-        
-        // Cria um container temporário para processar o HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = htmlContent;
+        try {
+            // Limpa e prepara
+            readerContent.innerHTML = '';
+            wordsArray = [];
+            currentIndex = 0;
+            resetTimer(); 
+            
+            // Cria um container temporário para processar o HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
 
-        // Processa cada nó filho preservando a estrutura
-        const fragment = document.createDocumentFragment();
-        
-        let hasBlocks = Array.from(tempDiv.children).some(c => ['P','DIV','H1','H2','H3','LI'].includes(c.tagName));
-        
-        if (!hasBlocks) {
-            const p = document.createElement('p');
-            p.className = 'reader-paragraph';
-            while (tempDiv.firstChild) {
-                p.appendChild(processNodeForWords(tempDiv.firstChild));
+            // Processa cada nó filho preservando a estrutura
+            const fragment = document.createDocumentFragment();
+            
+            let hasBlocks = Array.from(tempDiv.children).some(c => ['P','DIV','H1','H2','H3','LI'].includes(c.tagName));
+            
+            if (!hasBlocks) {
+                // CORREÇÃO DO BUG: Usar Array.from e forEach para iterar sobre os nós
+                // Em vez de while(tempDiv.firstChild) que causava loop infinito
+                const p = document.createElement('p');
+                p.className = 'reader-paragraph';
+                
+                const nodes = Array.from(tempDiv.childNodes);
+                nodes.forEach(node => {
+                    p.appendChild(processNodeForWords(node));
+                });
+                
+                fragment.appendChild(p);
+            } else {
+                Array.from(tempDiv.childNodes).forEach(child => {
+                    if (child.tagName === 'P') child.classList.add('reader-paragraph');
+                    fragment.appendChild(processNodeForWords(child));
+                });
             }
-            fragment.appendChild(p);
-        } else {
-            Array.from(tempDiv.childNodes).forEach(child => {
-                if (child.tagName === 'P') child.classList.add('reader-paragraph');
-                fragment.appendChild(processNodeForWords(child));
+
+            readerContent.appendChild(fragment);
+
+            const wordElements = readerContent.querySelectorAll('.word');
+            wordElements.forEach((el, index) => {
+                el.onclick = () => manualSync(index);
+                wordsArray.push({
+                    el: el,
+                    clean: el.innerText.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
+                });
             });
+
+            // Transição de tela
+            screenSetup.style.display = 'none';
+            screenReader.classList.add('active');
+            
+            toggleFullScreen(true);
+        } catch (error) {
+            console.error(error);
+            alert("Ocorreu um erro ao processar o texto. Tente novamente.");
+            loadingOverlay.style.display = 'none';
         }
-
-        readerContent.appendChild(fragment);
-
-        const wordElements = readerContent.querySelectorAll('.word');
-        wordElements.forEach((el, index) => {
-            el.onclick = () => manualSync(index);
-            wordsArray.push({
-                el: el,
-                clean: el.innerText.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
-            });
-        });
-
-        // Transição de tela
-        screenSetup.style.display = 'none';
-        screenReader.classList.add('active');
-        
-        toggleFullScreen(true); 
-        
-        // REMOVIDO: Auto-start do microfone
-        // setTimeout(() => { if (!isListening) toggleMic(); }, 800);
     }
 
     function exitReaderMode() {
@@ -571,10 +579,14 @@
 
     // --- ENTRADA 1: TEXTO COLADO (RICH TEXT) ---
     document.getElementById('btn-start-text').addEventListener('click', () => {
-        const html = richInput.innerHTML;
-        const textCheck = richInput.innerText;
-        if (textCheck.length < 2) return alert("Digite ou cole um texto maior.");
-        enterReaderMode(html); // Passa o HTML cru
+        try {
+            const html = richInput.innerHTML;
+            const textCheck = richInput.innerText;
+            if (!textCheck || textCheck.trim().length < 2) return alert("Digite ou cole um texto maior.");
+            enterReaderMode(html); // Passa o HTML cru
+        } catch (err) {
+            alert("Erro ao iniciar. Tente recarregar a página.");
+        }
     });
 
     // --- ENTRADA 2: UPLOAD PDF ---
