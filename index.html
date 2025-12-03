@@ -17,6 +17,7 @@
             --text: #1e293b;
             --highlight: #fef08a;
             --read-color: #94a3b8;
+            --font-size: 1.3rem; /* Variável para controle do tamanho da fonte */
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -138,11 +139,12 @@
             flex: 1;
             padding: 45px 20px 100px 20px; /* Mais padding top por causa do timer */
             overflow-y: auto;
-            font-size: 1.3rem; /* Letra maior para mobile */
+            font-size: var(--font-size); /* Usa a variável CSS */
             line-height: 1.8;
             max-width: 800px;
             margin: 0 auto;
             scroll-behavior: smooth;
+            transition: font-size 0.2s ease;
         }
 
         /* Menu Flutuante (Bottom Bar) */
@@ -151,16 +153,51 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(30, 41, 59, 0.9);
+            background: rgba(30, 41, 59, 0.95);
             backdrop-filter: blur(8px);
             padding: 10px 20px;
             border-radius: 50px;
             display: flex;
-            gap: 20px;
+            gap: 15px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
             z-index: 10000;
             transition: opacity 0.3s;
+            align-items: center;
         }
+
+        /* Painel de Fonte (Popup) */
+        #font-panel {
+            position: absolute;
+            bottom: 75px; /* Acima da barra */
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: none; /* Escondido por padrão */
+            gap: 10px;
+            align-items: center;
+            border: 1px solid #e2e8f0;
+        }
+        
+        #font-panel.active { display: flex; animation: fadeIn 0.2s ease; }
+
+        .font-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: var(--text);
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .font-btn:active { background: #f1f5f9; }
 
         /* Ocultar controles quando o usuário rolar (opcional) ou após inatividade */
         .reader-controls.fade-out { opacity: 0.3; }
@@ -182,6 +219,7 @@
 
         .ctrl-btn:active { background: rgba(255,255,255,0.2); }
         .ctrl-btn.main-action { background: var(--primary); box-shadow: 0 0 15px rgba(79, 70, 229, 0.5); transform: scale(1.1); }
+        .ctrl-btn.secondary-action { font-size: 1rem; opacity: 0.9; }
 
         /* Estilos do Texto */
         .word { 
@@ -264,6 +302,13 @@
             <!-- O texto aparecerá aqui -->
         </div>
 
+        <!-- Painel de Fonte (Popup) -->
+        <div id="font-panel">
+            <button class="font-btn" id="btn-font-decrease"><i class="fas fa-minus"></i></button>
+            <span style="font-size: 0.9rem; color: #333; font-weight: 600;">Fonte</span>
+            <button class="font-btn" id="btn-font-increase"><i class="fas fa-plus"></i></button>
+        </div>
+
         <!-- Controles Flutuantes -->
         <div class="reader-controls">
             <!-- Botão Sair -->
@@ -271,6 +316,11 @@
                 <i class="fas fa-arrow-left"></i>
             </button>
             
+            <!-- Botão Fonte -->
+            <button class="ctrl-btn secondary-action" id="btn-font-toggle" title="Tamanho da Fonte">
+                <i class="fas fa-text-height"></i>
+            </button>
+
             <!-- Botão Microfone -->
             <button class="ctrl-btn main-action" id="btn-toggle-mic">
                 <i class="fas fa-microphone"></i>
@@ -304,12 +354,19 @@
     const timerDisplay = document.getElementById('reading-timer');
     const richInput = document.getElementById('rich-input');
     
+    // Controles de Fonte
+    const btnFontToggle = document.getElementById('btn-font-toggle');
+    const fontPanel = document.getElementById('font-panel');
+    const btnFontInc = document.getElementById('btn-font-increase');
+    const btnFontDec = document.getElementById('btn-font-decrease');
+
     // Estado
     let recognition;
     let isListening = false;
     let wordsArray = [];
     let currentIndex = 0;
     let restartTimer = null;
+    let currentFontSize = 1.3; // rem
     
     // Estado do Cronômetro
     let timerInterval = null;
@@ -344,6 +401,33 @@
         const secs = (secondsElapsed % 60).toString().padStart(2, '0');
         timerDisplay.innerHTML = `<i class="far fa-clock"></i> ${mins}:${secs}`;
     }
+
+    // --- CONTROLE DE FONTE ---
+    btnFontToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fontPanel.classList.toggle('active');
+    });
+
+    // Fecha painel se clicar fora
+    document.addEventListener('click', (e) => {
+        if (!fontPanel.contains(e.target) && e.target !== btnFontToggle && !btnFontToggle.contains(e.target)) {
+            fontPanel.classList.remove('active');
+        }
+    });
+
+    btnFontInc.addEventListener('click', () => {
+        if (currentFontSize < 3.0) {
+            currentFontSize += 0.1;
+            document.documentElement.style.setProperty('--font-size', `${currentFontSize}rem`);
+        }
+    });
+
+    btnFontDec.addEventListener('click', () => {
+        if (currentFontSize > 0.8) {
+            currentFontSize -= 0.1;
+            document.documentElement.style.setProperty('--font-size', `${currentFontSize}rem`);
+        }
+    });
 
     // --- SETUP DO RECONHECIMENTO DE VOZ ---
     function initSpeech() {
@@ -394,15 +478,12 @@
 
 
     // --- PROCESSAMENTO INTELIGENTE DE NÓS DOM ---
-    // Esta função percorre o HTML mantendo tags como <b>, <i>, etc., 
-    // mas envolve cada palavra em um <span> clicável para o leitor.
     function processNodeForWords(node) {
         if (node.nodeType === 3) { // Nó de Texto
             const text = node.nodeValue;
-            if (!text.trim()) return document.createTextNode(text); // Mantém espaços
+            if (!text.trim()) return document.createTextNode(text); 
             
             const fragment = document.createDocumentFragment();
-            // Divide mantendo os separadores para reconstrução fiel
             const parts = text.split(/(\s+)/); 
             
             parts.forEach(part => {
@@ -418,10 +499,9 @@
             return fragment;
         }
         
-        // Se for um Elemento (b, i, div, p, etc.)
-        const copy = node.cloneNode(false); // Clona a tag sem filhos
+        const copy = node.cloneNode(false); 
         node.childNodes.forEach(child => {
-            copy.appendChild(processNodeForWords(child)); // Recursão
+            copy.appendChild(processNodeForWords(child)); 
         });
         return copy;
     }
@@ -442,24 +522,17 @@
         // Processa cada nó filho preservando a estrutura
         const fragment = document.createDocumentFragment();
         
-        // Se o conteúdo não tiver tags de bloco (p, div), envolvemos em <p>
-        // Isso ajuda com textos simples colados
         let hasBlocks = Array.from(tempDiv.children).some(c => ['P','DIV','H1','H2','H3','LI'].includes(c.tagName));
         
         if (!hasBlocks) {
-            // Divide por quebras de linha manuais se for texto plano ou HTML simples
-            // Mas se for HTML rico colado, geralmente já vem com divs ou ps
             const p = document.createElement('p');
             p.className = 'reader-paragraph';
-            // Movemos todo o conteúdo para dentro de um P processado
             while (tempDiv.firstChild) {
                 p.appendChild(processNodeForWords(tempDiv.firstChild));
             }
             fragment.appendChild(p);
         } else {
-            // Processa estrutura existente
             Array.from(tempDiv.childNodes).forEach(child => {
-                 // Adiciona classe de parágrafo para estilização se for P
                 if (child.tagName === 'P') child.classList.add('reader-paragraph');
                 fragment.appendChild(processNodeForWords(child));
             });
@@ -467,7 +540,6 @@
 
         readerContent.appendChild(fragment);
 
-        // Agora reconstruímos o array linear de palavras para a lógica de áudio
         const wordElements = readerContent.querySelectorAll('.word');
         wordElements.forEach((el, index) => {
             el.onclick = () => manualSync(index);
@@ -483,10 +555,8 @@
         
         toggleFullScreen(true); 
         
-        // Auto-start do microfone
-        setTimeout(() => {
-            if (!isListening) toggleMic();
-        }, 800);
+        // REMOVIDO: Auto-start do microfone
+        // setTimeout(() => { if (!isListening) toggleMic(); }, 800);
     }
 
     function exitReaderMode() {
@@ -496,6 +566,7 @@
         screenReader.classList.remove('active');
         screenSetup.style.display = 'flex';
         richInput.innerHTML = ''; // Limpa o input
+        fontPanel.classList.remove('active'); // Fecha painel de fonte se aberto
     }
 
     // --- ENTRADA 1: TEXTO COLADO (RICH TEXT) ---
@@ -522,9 +593,7 @@
                 const page = await pdf.getPage(i);
                 const content = await page.getTextContent();
                 
-                // Constrói HTML simples com parágrafos para o PDF
                 let pageHtml = "<p class='reader-paragraph'>";
-                // Tenta reconstruir parágrafos baseados em quebras de linha
                 content.items.forEach(item => {
                     pageHtml += item.str + (item.hasEOL ? "<br>" : " ");
                 });
@@ -533,7 +602,7 @@
             }
 
             loadingOverlay.style.display = 'none';
-            enterReaderMode(fullHtml); // Passa HTML gerado
+            enterReaderMode(fullHtml); 
 
         } catch (err) {
             loadingOverlay.style.display = 'none';
@@ -546,12 +615,10 @@
     function matchText(spokenWords) {
         if (!spokenWords.length) return;
         
-        // Limpa palavras faladas
         const cleanSpoken = spokenWords.map(w => w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, ""));
         
         if (cleanSpoken.length === 0) return;
 
-        // Pega última e penúltima palavra falada
         const lastSpoken = cleanSpoken[cleanSpoken.length - 1];
         const prevSpoken = cleanSpoken.length > 1 ? cleanSpoken[cleanSpoken.length - 2] : null;
 
