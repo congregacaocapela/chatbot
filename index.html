@@ -473,29 +473,52 @@
         }
     });
 
-    // --- LÓGICA DE SINCRONIZAÇÃO (Inteligente) ---
+    // --- LÓGICA DE SINCRONIZAÇÃO (Inteligente e Metódica) ---
     function matchText(spokenWords) {
         if (!spokenWords.length) return;
         
+        // Limpa palavras faladas
         const cleanSpoken = spokenWords.map(w => w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, ""));
-        const searchLimit = Math.min(currentIndex + 40, wordsArray.length);
+        
+        if (cleanSpoken.length === 0) return;
 
-        if (cleanSpoken.length >= 2) {
-            const s1 = cleanSpoken[cleanSpoken.length - 2];
-            const s2 = cleanSpoken[cleanSpoken.length - 1];
+        // Pega última e penúltima palavra falada
+        const lastSpoken = cleanSpoken[cleanSpoken.length - 1];
+        const prevSpoken = cleanSpoken.length > 1 ? cleanSpoken[cleanSpoken.length - 2] : null;
 
-            for (let i = currentIndex; i < searchLimit - 1; i++) {
-                if (wordsArray[i].clean === s1 && wordsArray[i+1].clean === s2) {
+        // 1. PRIORIDADE MÁXIMA: Verifica a PRÓXIMA palavra imediata
+        // Isso garante fluidez. Se o usuário falar o que é esperado, avança instantaneamente.
+        if (currentIndex < wordsArray.length) {
+            const nextWord = wordsArray[currentIndex].clean;
+            if (nextWord === lastSpoken) {
+                updatePos(currentIndex);
+                return;
+            }
+        }
+
+        // Se não for a imediata, procura com regras rígidas:
+
+        // 2. BUSCA POR SEQUÊNCIA (Segura - Permite "pulos" curtos se for uma frase)
+        // Procura nos próximos 50 termos, mas SÓ aceita se encontrar PAR de palavras.
+        const seqLimit = Math.min(currentIndex + 50, wordsArray.length);
+        if (prevSpoken && lastSpoken) {
+            for (let i = currentIndex; i < seqLimit - 1; i++) {
+                if (wordsArray[i].clean === prevSpoken && wordsArray[i+1].clean === lastSpoken) {
                     updatePos(i + 1);
                     return;
                 }
             }
         }
 
-        const last = cleanSpoken[cleanSpoken.length - 1];
-        if (last && last.length > 3) {
-            for (let i = currentIndex; i < searchLimit; i++) {
-                if (wordsArray[i].clean === last) {
+        // 3. BUSCA POR PALAVRA ÚNICA (Rigorosa - Evita pulos acidentais)
+        // Só aceita pular por palavra única se:
+        // A) A palavra for longa (> 4 letras)
+        // B) Estiver MUITO PERTO (no máximo 10 palavras à frente)
+        const singleLimit = Math.min(currentIndex + 10, wordsArray.length);
+        
+        if (lastSpoken && lastSpoken.length > 4) {
+            for (let i = currentIndex; i < singleLimit; i++) {
+                if (wordsArray[i].clean === lastSpoken) {
                     updatePos(i);
                     return;
                 }
