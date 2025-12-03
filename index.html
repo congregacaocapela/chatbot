@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de PDF Inteligente</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leitor Zen</title>
     <!-- Carregando PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- Ícones -->
@@ -12,267 +12,255 @@
     <style>
         :root {
             --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --success: #22c55e;
-            --danger: #ef4444;
-            --bg: #f3f4f6;
-            --text: #1f2937;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --highlight: #fef08a;
+            --read-color: #94a3b8;
         }
 
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             background-color: var(--bg);
             color: var(--text);
             margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden; /* Evita scroll na página principal */
+        }
+
+        /* --- TELA INICIAL (SETUP) --- */
+        #screen-setup {
+            display: flex;
+            flex-direction: column;
             padding: 20px;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            color: #111827;
-        }
-
-        .header p {
-            color: #6b7280;
-            font-size: 0.9rem;
-            margin-top: 5px;
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        button {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            font-size: 0.9rem;
-        }
-
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .btn-upload { background-color: white; color: var(--text); border: 1px solid #d1d5db; }
-        .btn-upload:hover:not(:disabled) { background-color: #f9fafb; }
-
-        .btn-start { background-color: var(--success); color: white; }
-        .btn-start:hover:not(:disabled) { background-color: #16a34a; }
-
-        .btn-stop { background-color: var(--danger); color: white; }
-        .btn-stop:hover:not(:disabled) { background-color: #dc2626; }
-        
-        .btn-fullscreen { background-color: #3b82f6; color: white; }
-        .btn-fullscreen:hover:not(:disabled) { background-color: #2563eb; }
-
-        .status-bar {
-            text-align: center;
-            font-size: 0.85rem;
-            margin-bottom: 10px;
-            min-height: 20px;
-            color: #4b5563;
-        }
-
-        .status-error { color: var(--danger); font-weight: bold; }
-        .status-active { color: var(--primary); font-weight: bold; animation: pulse 1.5s infinite; }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
-        }
-
-        /* Container do Texto */
-        #reader-container {
-            flex: 1;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            overflow-y: auto;
-            position: relative;
-            max-width: 900px;
-            width: 100%;
-            margin: 0 auto;
-            box-sizing: border-box;
-            transition: all 0.3s ease;
-        }
-
-        /* Estilos específicos para Tela Cheia */
-        #reader-container:fullscreen {
-            padding: 50px;
-            border-radius: 0;
-            max-width: none;
-            width: 100vw;
-            height: 100vh;
-            background-color: #ffffff; /* Fundo branco em tela cheia */
-        }
-
-        /* Ajuste de fonte em tela cheia para leitura melhor */
-        #reader-container:fullscreen .pdf-content {
-            font-size: 1.8rem;
-            line-height: 2;
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-
-        .pdf-content {
-            font-size: 1.1rem;
-            line-height: 1.8;
-            color: #374151;
-            white-space: pre-wrap;
-        }
-
-        /* Estados das palavras */
-        .word {
-            cursor: pointer;
-            padding: 2px 0;
-            border-radius: 2px;
-            transition: background-color 0.2s;
-        }
-
-        .word:hover {
-            background-color: #e5e7eb;
-            text-decoration: underline;
-        }
-
-        .word.read {
-            color: #059669; /* Verde escuro */
-            opacity: 0.7;
-        }
-
-        .word.current {
-            background-color: #fcd34d; /* Amarelo destaque */
-            color: black;
-            font-weight: bold;
-            padding: 2px 4px;
-            border-radius: 4px;
-            box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.5);
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
             height: 100%;
-            color: #9ca3af;
+            overflow-y: auto;
+            max-width: 600px;
+            margin: 0 auto;
+            animation: fadeIn 0.3s ease;
+        }
+
+        h1 { font-size: 1.8rem; text-align: center; margin-bottom: 0.5rem; color: var(--primary); }
+        .subtitle { text-align: center; color: #64748b; margin-bottom: 2rem; font-size: 0.9rem; }
+
+        .card-option {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
             text-align: center;
         }
 
-        .empty-state i {
-            font-size: 3rem;
+        textarea {
+            width: 100%;
+            height: 120px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 1rem;
+            resize: none;
             margin-bottom: 15px;
+            font-family: inherit;
         }
+
+        textarea:focus { outline: none; border-color: var(--primary); }
+
+        .btn-large {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background-color: var(--primary);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+            transition: transform 0.1s;
+        }
+
+        .btn-large:active { transform: scale(0.98); }
+        .btn-large.secondary { background-color: white; color: var(--text); border: 2px solid #e2e8f0; box-shadow: none; }
+        .btn-large:disabled { opacity: 0.6; cursor: wait; }
+
+        /* --- TELA DE LEITURA (READER) --- */
+        #screen-reader {
+            display: none; /* Escondido inicialmente */
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--surface);
+            z-index: 9999;
+            flex-direction: column;
+        }
+
+        #screen-reader.active { display: flex; animation: slideUp 0.3s ease; }
+
+        /* Área do texto */
+        #reader-content {
+            flex: 1;
+            padding: 25px 20px 100px 20px; /* Padding bottom grande para o menu flutuante */
+            overflow-y: auto;
+            font-size: 1.3rem; /* Letra maior para mobile */
+            line-height: 1.8;
+            max-width: 800px;
+            margin: 0 auto;
+            scroll-behavior: smooth;
+        }
+
+        /* Menu Flutuante (Bottom Bar) */
+        .reader-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(8px);
+            padding: 10px 20px;
+            border-radius: 50px;
+            display: flex;
+            gap: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            z-index: 10000;
+            transition: opacity 0.3s;
+        }
+
+        /* Ocultar controles quando o usuário rolar (opcional) ou após inatividade */
+        .reader-controls.fade-out { opacity: 0.3; }
+        .reader-controls:hover { opacity: 1; }
+
+        .ctrl-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .ctrl-btn:active { background: rgba(255,255,255,0.2); }
+        .ctrl-btn.main-action { background: var(--primary); box-shadow: 0 0 15px rgba(79, 70, 229, 0.5); transform: scale(1.1); }
+
+        /* Estilos do Texto */
+        .word { padding: 2px 1px; border-radius: 4px; cursor: pointer; }
+        .word.read { color: var(--read-color); }
+        .word.current { 
+            background-color: var(--highlight); 
+            color: black; 
+            font-weight: 700; 
+            padding: 4px 6px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 20000;
+        }
+
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>Leitor Inteligente</h1>
-        <p>Carregue um PDF e leia em voz alta. O sistema acompanhará você.</p>
-    </div>
+    <!-- TELA 1: SETUP (INICIAL) -->
+    <div id="screen-setup">
+        <h1>Leitor Zen 🎧</h1>
+        <p class="subtitle">Cole um texto ou envie um PDF para começar.</p>
 
-    <div class="controls">
-        <input type="file" id="file-input" accept="application/pdf" style="display: none;">
-        <button class="btn-upload" onclick="document.getElementById('file-input').click()">
-            <i class="fas fa-file-pdf"></i> Carregar PDF
-        </button>
-        <button id="btn-start" class="btn-start" disabled>
-            <i class="fas fa-microphone"></i> Iniciar Leitura
-        </button>
-        <button id="btn-stop" class="btn-stop" disabled>
-            <i class="fas fa-stop"></i> Parar
-        </button>
-        <button id="btn-fullscreen" class="btn-fullscreen" disabled onclick="toggleFullScreen()">
-            <i class="fas fa-expand"></i> Tela Cheia
-        </button>
-    </div>
+        <!-- Opção 1: PDF -->
+        <div class="card-option">
+            <input type="file" id="file-input" accept="application/pdf" style="display: none;">
+            <button class="btn-large secondary" onclick="document.getElementById('file-input').click()">
+                <i class="fas fa-file-pdf"></i> Escolher PDF
+            </button>
+        </div>
 
-    <div id="status-bar" class="status-bar">Aguardando arquivo...</div>
+        <div style="text-align: center; margin: 10px 0; color: #cbd5e1;">OU</div>
 
-    <div id="reader-container">
-        <div id="text-display" class="pdf-content">
-            <div class="empty-state">
-                <i class="fas fa-book-open"></i>
-                <p>Nenhum PDF carregado.<br>Selecione um arquivo para começar.</p>
-            </div>
+        <!-- Opção 2: Colar Texto -->
+        <div class="card-option">
+            <textarea id="text-input" placeholder="Cole seu texto aqui..."></textarea>
+            <button class="btn-large" id="btn-start-text">
+                <i class="fas fa-book-open"></i> Ler Texto Colado
+            </button>
         </div>
     </div>
 
+    <!-- TELA 2: LEITURA (IMERSIVA) -->
+    <div id="screen-reader">
+        <div id="reader-content">
+            <!-- O texto aparecerá aqui -->
+        </div>
+
+        <!-- Controles Flutuantes -->
+        <div class="reader-controls">
+            <button class="ctrl-btn" onclick="exitReaderMode()" title="Sair">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            
+            <button class="ctrl-btn main-action" id="btn-toggle-mic">
+                <i class="fas fa-microphone"></i>
+            </button>
+
+            <button class="ctrl-btn" onclick="toggleFullScreen()" title="Tela Cheia">
+                <i class="fas fa-expand"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading-overlay">
+        <i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; color: var(--primary);"></i>
+        <p style="margin-top: 15px; color: #64748b;">Preparando leitura...</p>
+    </div>
+
 <script>
-    // Configuração do Worker do PDF.js
+    // Config PDF.js
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-    // Elementos DOM
-    const fileInput = document.getElementById('file-input');
-    const textDisplay = document.getElementById('text-display');
-    const btnStart = document.getElementById('btn-start');
-    const btnStop = document.getElementById('btn-stop');
-    const btnFullscreen = document.getElementById('btn-fullscreen');
-    const statusBar = document.getElementById('status-bar');
-    const readerContainer = document.getElementById('reader-container');
-
-    // Variáveis de Estado
+    // Elementos
+    const screenSetup = document.getElementById('screen-setup');
+    const screenReader = document.getElementById('screen-reader');
+    const readerContent = document.getElementById('reader-content');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const btnToggleMic = document.getElementById('btn-toggle-mic');
+    
+    // Estado
     let recognition;
     let isListening = false;
-    let wordsArray = []; 
+    let wordsArray = [];
     let currentIndex = 0;
-    let restartTimer = null; // Timer para evitar loop infinito de erros
+    let restartTimer = null;
 
-    // --- LÓGICA DE TELA CHEIA ---
-    function toggleFullScreen() {
-        if (!document.fullscreenElement) {
-            readerContainer.requestFullscreen().catch(err => {
-                alert(`Erro ao tentar ativar tela cheia: ${err.message}`);
-            });
-        } else {
-            document.exitFullscreen();
-        }
-    }
-
-    // Monitora mudanças na tela cheia para trocar o ícone/texto se necessário
-    document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement) {
-            btnFullscreen.innerHTML = '<i class="fas fa-compress"></i> Sair da Tela Cheia';
-        } else {
-            btnFullscreen.innerHTML = '<i class="fas fa-expand"></i> Tela Cheia';
-        }
-    });
-
-    // --- LÓGICA DE RECONHECIMENTO DE VOZ (Web Speech API) ---
-    function setupRecognition() {
+    // --- SETUP DO RECONHECIMENTO DE VOZ ---
+    function initSpeech() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            statusBar.innerHTML = "<span class='status-error'>Seu navegador não suporta reconhecimento de voz. Use o Chrome ou Edge.</span>";
+            alert("Seu navegador não suporta reconhecimento de voz.");
             return null;
         }
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const rec = new SpeechRecognition();
-        
+        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new Speech();
         rec.lang = 'pt-BR';
         rec.continuous = true;
         rec.interimResults = true;
@@ -280,249 +268,211 @@
 
         rec.onstart = () => {
             isListening = true;
-            updateUIState(true);
-            statusBar.innerHTML = "<span class='status-active'>🎤 Ouvindo... Pode começar a ler!</span>";
+            btnToggleMic.innerHTML = '<i class="fas fa-pause"></i>';
+            btnToggleMic.style.backgroundColor = '#ef4444'; // Vermelho para parar
         };
 
         rec.onend = () => {
             isListening = false;
-            // Se parou mas o usuário não clicou em parar, tenta reiniciar (tratamento para 'no-speech')
-            if (btnStop.disabled === false) { 
-                // Pequeno delay para não travar o navegador se falhar muito rápido
-                restartTimer = setTimeout(() => {
-                    try { rec.start(); } catch(e) {}
-                }, 1000);
+            if (restartTimer) { // Reinício automático se não foi manual
+                 try { rec.start(); } catch(e){}
             } else {
-                updateUIState(false);
-                statusBar.innerText = "Leitura pausada.";
+                btnToggleMic.innerHTML = '<i class="fas fa-microphone"></i>';
+                btnToggleMic.style.backgroundColor = ''; // Volta ao padrão
             }
         };
 
         rec.onresult = (event) => {
-            const resultIndex = event.resultIndex;
-            const transcript = event.results[resultIndex][0].transcript.trim();
-            
-            // Processa a fala
-            const spokenWords = transcript.split(/\s+/);
-            matchText(spokenWords);
-        };
-
-        rec.onerror = (event) => {
-            console.warn("Erro de reconhecimento:", event.error);
-            
-            if (event.error === 'no-speech') {
-                statusBar.innerText = "Nenhuma fala detectada. Tentando ouvir novamente...";
-                // O onend será chamado e tentará reiniciar
-            } else if (event.error === 'not-allowed') {
-                statusBar.innerHTML = "<span class='status-error'>❌ Permissão de microfone negada.</span>";
-                stopRecognition();
-            } else {
-                statusBar.innerText = "Erro: " + event.error;
-            }
+            const transcript = event.results[event.resultIndex][0].transcript.trim().split(/\s+/);
+            matchText(transcript);
         };
 
         return rec;
     }
 
-    // Inicializa o reconhecimento
-    recognition = setupRecognition();
+    recognition = initSpeech();
 
-    // --- MANIPULAÇÃO DO PDF ---
-    fileInput.addEventListener('change', async function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        statusBar.innerText = "Processando PDF... (Isso pode levar alguns segundos)";
-        textDisplay.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Extraindo texto...</p></div>';
-        
-        try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
-            let fullText = "";
-            
-            // Extrai página por página para manter ordem
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                
-                // Melhoria na junção de palavras (trata hífens e quebras)
-                const pageText = textContent.items.map(item => item.str).join(' ');
-                fullText += pageText + "\n\n";
-            }
-
-            renderText(fullText);
-            statusBar.innerText = "Pronto! Clique em 'Iniciar Leitura'.";
-            btnStart.disabled = false;
-            btnFullscreen.disabled = false; // Habilita o botão de tela cheia
-
-        } catch (err) {
-            console.error(err);
-            statusBar.innerHTML = "<span class='status-error'>Erro ao ler o arquivo PDF. Tente outro arquivo.</span>";
-            textDisplay.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Erro no arquivo.</p></div>';
-        }
-    });
-
-    // --- RENDERIZAÇÃO DO TEXTO NA TELA ---
-    function renderText(text) {
-        textDisplay.innerHTML = '';
+    // --- CONTROLE DE MODO LEITURA ---
+    function enterReaderMode(text) {
+        // Limpa e prepara
+        readerContent.innerHTML = '';
         wordsArray = [];
         currentIndex = 0;
 
-        // Limpeza básica e divisão por espaços
+        // Renderiza palavras
         const words = text.split(/\s+/);
-
-        words.forEach((word, index) => {
-            if (!word.trim()) return; // Ignora espaços vazios
-
+        words.forEach((w, i) => {
+            if (!w.trim()) return;
             const span = document.createElement('span');
-            span.innerText = word + " ";
-            span.className = "word";
-            span.id = `w-${index}`;
+            span.innerText = w + " ";
+            span.className = 'word';
+            span.onclick = () => manualSync(i); // Clique para ajustar
+            readerContent.appendChild(span);
             
-            // Evento de clique para correção manual
-            span.onclick = () => manualSync(index);
-
-            textDisplay.appendChild(span);
-
-            // Armazena versão limpa para comparação
             wordsArray.push({
-                element: span,
-                // Remove pontuação para facilitar o match (ex: "casa." vira "casa")
-                cleanWord: word.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g,"")
+                el: span,
+                clean: w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, "")
             });
         });
+
+        // Transição de tela
+        screenSetup.style.display = 'none';
+        screenReader.classList.add('active');
+        
+        // Tenta tela cheia automática (pode ser bloqueado pelo navegador)
+        toggleFullScreen(true);
+
+        // Auto-start do microfone após 1 segundo
+        setTimeout(() => toggleMic(), 500);
     }
 
-    // --- NOVA LÓGICA DE SINCRONIZAÇÃO (MELHORADA) ---
-    function matchText(spokenWords) {
-        if (spokenWords.length === 0) return;
+    function exitReaderMode() {
+        stopMic();
+        if (document.fullscreenElement) document.exitFullscreen();
+        screenReader.classList.remove('active');
+        screenSetup.style.display = 'flex';
+        // Reseta texto colado para não ficar velho
+        document.getElementById('text-input').value = '';
+    }
 
-        // Limpa as palavras faladas para comparar igual ao texto do PDF
-        const cleanSpoken = spokenWords.map(w => w.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g,""));
-        
-        // Janela de busca (olha adiante X palavras)
-        const searchRange = 50; 
-        const limit = Math.min(currentIndex + searchRange, wordsArray.length);
+    // --- ENTRADA 1: TEXTO COLADO ---
+    document.getElementById('btn-start-text').addEventListener('click', () => {
+        const text = document.getElementById('text-input').value;
+        if (text.length < 5) return alert("Digite ou cole um texto maior.");
+        enterReaderMode(text);
+    });
 
-        // 1. TENTATIVA FORTE: Sequência de 3 palavras (Quase impossível errar)
-        // Isso impede que ele se perca em palavras comuns
-        if (cleanSpoken.length >= 3) {
-            const s1 = cleanSpoken[cleanSpoken.length - 3];
-            const s2 = cleanSpoken[cleanSpoken.length - 2];
-            const s3 = cleanSpoken[cleanSpoken.length - 1];
+    // --- ENTRADA 2: UPLOAD PDF ---
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-            for (let i = currentIndex; i < limit - 2; i++) {
-                if (wordsArray[i].cleanWord === s1 && 
-                    wordsArray[i+1].cleanWord === s2 && 
-                    wordsArray[i+2].cleanWord === s3) {
-                    updatePosition(i + 2);
-                    return; // Achou sequência perfeita, sai
-                }
+        loadingOverlay.style.display = 'flex';
+
+        try {
+            const buffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(buffer).promise;
+            let fullText = "";
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                fullText += content.items.map(item => item.str).join(' ') + " \n\n ";
             }
-        }
 
-        // 2. TENTATIVA MÉDIA: Sequência de 2 palavras (Muito comum e seguro)
+            loadingOverlay.style.display = 'none';
+            enterReaderMode(fullText);
+
+        } catch (err) {
+            loadingOverlay.style.display = 'none';
+            alert("Erro ao ler PDF.");
+            console.error(err);
+        }
+    });
+
+    // --- LÓGICA DE SINCRONIZAÇÃO (Inteligente) ---
+    function matchText(spokenWords) {
+        if (!spokenWords.length) return;
+        
+        const cleanSpoken = spokenWords.map(w => w.toLowerCase().replace(/[^\w\u00C0-\u00FF]/g, ""));
+        const searchLimit = Math.min(currentIndex + 40, wordsArray.length);
+
+        // Estratégia: Procura sequência de 2 palavras (muito preciso)
         if (cleanSpoken.length >= 2) {
             const s1 = cleanSpoken[cleanSpoken.length - 2];
             const s2 = cleanSpoken[cleanSpoken.length - 1];
 
-            for (let i = currentIndex; i < limit - 1; i++) {
-                if (wordsArray[i].cleanWord === s1 && 
-                    wordsArray[i+1].cleanWord === s2) {
-                    updatePosition(i + 1);
-                    return; // Achou par de palavras, sai
+            for (let i = currentIndex; i < searchLimit - 1; i++) {
+                if (wordsArray[i].clean === s1 && wordsArray[i+1].clean === s2) {
+                    updatePos(i + 1);
+                    return;
                 }
             }
         }
 
-        // 3. TENTATIVA FRACA: Palavra única (Só aceita se for palavra longa)
-        const lastSpoken = cleanSpoken[cleanSpoken.length - 1];
-        
-        // Só avança por palavra única se ela tiver mais de 3 letras
-        // Isso evita pular em "de", "que", "para", "com" que são muito comuns
-        if (lastSpoken && lastSpoken.length > 3) {
-            for (let i = currentIndex; i < limit; i++) {
-                if (wordsArray[i].cleanWord === lastSpoken) {
-                    updatePosition(i);
+        // Fallback: Procura palavra única (se for longa > 3 chars)
+        const last = cleanSpoken[cleanSpoken.length - 1];
+        if (last && last.length > 3) {
+            for (let i = currentIndex; i < searchLimit; i++) {
+                if (wordsArray[i].clean === last) {
+                    updatePos(i);
                     return;
                 }
             }
         }
     }
 
-    function updatePosition(newIndex) {
-        // Marca todas as palavras anteriores como lidas
-        for (let j = currentIndex; j <= newIndex; j++) {
-            wordsArray[j].element.classList.add('read');
-            wordsArray[j].element.classList.remove('current');
+    function updatePos(index) {
+        // Marca anteriores como lidos
+        for (let i = currentIndex; i <= index; i++) {
+            wordsArray[i].el.classList.add('read');
+            wordsArray[i].el.classList.remove('current');
         }
-
-        // Atualiza índice atual
-        currentIndex = newIndex + 1;
-
-        // Marca a próxima palavra como alvo atual (opcional, visualmente agradável)
+        
+        currentIndex = index + 1;
+        
         if (currentIndex < wordsArray.length) {
-            const currentEl = wordsArray[currentIndex].element;
+            const currentEl = wordsArray[currentIndex].el;
             currentEl.classList.add('current');
             
-            // Scroll suave automático
-            currentEl.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'nearest'
-            });
+            // Scroll suave centralizado
+            currentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }
 
-    // --- CORREÇÃO MANUAL (CLIQUE) ---
     function manualSync(index) {
-        if (!isListening && !btnStart.disabled) {
-            // Se não estiver ouvindo, apenas move o marcador
-            statusBar.innerText = "Posição ajustada manualmente.";
-        }
-        // Ajusta tudo até o clique
-        // Remove classes "current" antigas
-        document.querySelectorAll('.word.current').forEach(el => el.classList.remove('current'));
+        // Permite clicar na palavra para forçar a posição
+        document.querySelectorAll('.current').forEach(e => e.classList.remove('current'));
         
-        // Reseta estados se clicou para trás
+        // Se voltar no texto, remove o 'read' das palavras futuras
         if (index < currentIndex) {
-             for (let i = index; i < currentIndex; i++) {
-                wordsArray[i].element.classList.remove('read');
-             }
+            for(let i = index; i < currentIndex; i++) wordsArray[i].el.classList.remove('read');
         }
-        
+        // Se avançar, adiciona 'read'
+        else {
+             for(let i = currentIndex; i < index; i++) wordsArray[i].el.classList.add('read');
+        }
+
         currentIndex = index;
-        updatePosition(index - 1); // -1 porque updatePosition avança +1
+        updatePos(index - 1);
     }
 
-    // --- CONTROLES DA UI ---
-    function updateUIState(listening) {
-        btnStart.disabled = listening;
-        btnStop.disabled = !listening;
-        fileInput.disabled = listening;
-    }
-
-    function stopRecognition() {
-        if (recognition) recognition.stop();
-        clearTimeout(restartTimer);
-        isListening = false;
-        updateUIState(false);
-    }
-
-    btnStart.addEventListener('click', () => {
-        if (recognition) {
-            try {
-                recognition.start();
-            } catch (e) {
-                console.log("Já iniciado ou erro de estado:", e);
-            }
+    // --- CONTROLES GERAIS ---
+    function toggleMic() {
+        if (!recognition) return;
+        if (isListening) stopMic();
+        else {
+            restartTimer = true; // Flag para auto-restart se cair
+            recognition.start();
         }
-    });
+    }
 
-    btnStop.addEventListener('click', () => {
-        stopRecognition();
-    });
+    function stopMic() {
+        if (recognition) {
+            restartTimer = null; // Cancela auto-restart
+            recognition.stop();
+        }
+    }
+
+    function toggleFullScreen(forceOn = false) {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(e => console.log("Fullscreen bloqueado sem interação"));
+        } else if (!forceOn) {
+            document.exitFullscreen();
+        }
+    }
+
+    // Evita que a tela apague (Wake Lock API - funciona em Android/Chrome)
+    if ('wakeLock' in navigator) {
+        let wakeLock = null;
+        const requestWakeLock = async () => {
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+        };
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
+        });
+        requestWakeLock();
+    }
 
 </script>
 </body>
