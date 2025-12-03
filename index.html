@@ -84,6 +84,9 @@
 
         .btn-stop { background-color: var(--danger); color: white; }
         .btn-stop:hover:not(:disabled) { background-color: #dc2626; }
+        
+        .btn-fullscreen { background-color: #3b82f6; color: white; }
+        .btn-fullscreen:hover:not(:disabled) { background-color: #2563eb; }
 
         .status-bar {
             text-align: center;
@@ -115,6 +118,25 @@
             width: 100%;
             margin: 0 auto;
             box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        /* Estilos específicos para Tela Cheia */
+        #reader-container:fullscreen {
+            padding: 50px;
+            border-radius: 0;
+            max-width: none;
+            width: 100vw;
+            height: 100vh;
+            background-color: #ffffff; /* Fundo branco em tela cheia */
+        }
+
+        /* Ajuste de fonte em tela cheia para leitura melhor */
+        #reader-container:fullscreen .pdf-content {
+            font-size: 1.8rem;
+            line-height: 2;
+            max-width: 1100px;
+            margin: 0 auto;
         }
 
         .pdf-content {
@@ -185,6 +207,9 @@
         <button id="btn-stop" class="btn-stop" disabled>
             <i class="fas fa-stop"></i> Parar
         </button>
+        <button id="btn-fullscreen" class="btn-fullscreen" disabled onclick="toggleFullScreen()">
+            <i class="fas fa-expand"></i> Tela Cheia
+        </button>
     </div>
 
     <div id="status-bar" class="status-bar">Aguardando arquivo...</div>
@@ -207,7 +232,9 @@
     const textDisplay = document.getElementById('text-display');
     const btnStart = document.getElementById('btn-start');
     const btnStop = document.getElementById('btn-stop');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
     const statusBar = document.getElementById('status-bar');
+    const readerContainer = document.getElementById('reader-container');
 
     // Variáveis de Estado
     let recognition;
@@ -215,6 +242,26 @@
     let wordsArray = []; 
     let currentIndex = 0;
     let restartTimer = null; // Timer para evitar loop infinito de erros
+
+    // --- LÓGICA DE TELA CHEIA ---
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            readerContainer.requestFullscreen().catch(err => {
+                alert(`Erro ao tentar ativar tela cheia: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // Monitora mudanças na tela cheia para trocar o ícone/texto se necessário
+    document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) {
+            btnFullscreen.innerHTML = '<i class="fas fa-compress"></i> Sair da Tela Cheia';
+        } else {
+            btnFullscreen.innerHTML = '<i class="fas fa-expand"></i> Tela Cheia';
+        }
+    });
 
     // --- LÓGICA DE RECONHECIMENTO DE VOZ (Web Speech API) ---
     function setupRecognition() {
@@ -253,7 +300,7 @@
 
         rec.onresult = (event) => {
             const resultIndex = event.resultIndex;
-            const transcript = event.results[resultIndex][0].transcript.toLowerCase().trim();
+            const transcript = event.results[resultIndex][0].transcript.trim();
             
             // Processa a fala
             const spokenWords = transcript.split(/\s+/);
@@ -307,6 +354,7 @@
             renderText(fullText);
             statusBar.innerText = "Pronto! Clique em 'Iniciar Leitura'.";
             btnStart.disabled = false;
+            btnFullscreen.disabled = false; // Habilita o botão de tela cheia
 
         } catch (err) {
             console.error(err);
@@ -346,24 +394,59 @@
         });
     }
 
-    // --- SINCRONIZAÇÃO (MATCHING) ---
+    // --- NOVA LÓGICA DE SINCRONIZAÇÃO (MELHORADA) ---
     function matchText(spokenWords) {
-        const lastSpoken = spokenWords[spokenWords.length - 1];
-        if (!lastSpoken || lastSpoken.length < 2) return; // Ignora palavras muito curtas ou vazias
+        if (spokenWords.length === 0) return;
 
-        // Janela de busca: Procura a palavra falada nas próximas 30 palavras
-        // Isso evita falsos positivos muito longe no texto
-        const searchRange = 30;
+        // Limpa as palavras faladas para comparar igual ao texto do PDF
+        const cleanSpoken = spokenWords.map(w => w.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g,""));
+        
+        // Janela de busca (olha adiante X palavras)
+        const searchRange = 50; 
         const limit = Math.min(currentIndex + searchRange, wordsArray.length);
 
-        for (let i = currentIndex; i < limit; i++) {
-            const pdfWord = wordsArray[i].cleanWord;
+        // 1. TENTATIVA FORTE: Sequência de 3 palavras (Quase impossível errar)
+        // Isso impede que ele se perca em palavras comuns
+        if (cleanSpoken.length >= 3) {
+            const s1 = cleanSpoken[cleanSpoken.length - 3];
+            const s2 = cleanSpoken[cleanSpoken.length - 2];
+            const s3 = cleanSpoken[cleanSpoken.length - 1];
 
-            // Lógica de "Fuzzy Match" simples (se contiver a palavra)
-            // Ex: Falou "amigo", texto é "amigos" -> Aceita
-            if (pdfWord && (pdfWord === lastSpoken || pdfWord.includes(lastSpoken) || lastSpoken.includes(pdfWord))) {
-                updatePosition(i);
-                break;
+            for (let i = currentIndex; i < limit - 2; i++) {
+                if (wordsArray[i].cleanWord === s1 && 
+                    wordsArray[i+1].cleanWord === s2 && 
+                    wordsArray[i+2].cleanWord === s3) {
+                    updatePosition(i + 2);
+                    return; // Achou sequência perfeita, sai
+                }
+            }
+        }
+
+        // 2. TENTATIVA MÉDIA: Sequência de 2 palavras (Muito comum e seguro)
+        if (cleanSpoken.length >= 2) {
+            const s1 = cleanSpoken[cleanSpoken.length - 2];
+            const s2 = cleanSpoken[cleanSpoken.length - 1];
+
+            for (let i = currentIndex; i < limit - 1; i++) {
+                if (wordsArray[i].cleanWord === s1 && 
+                    wordsArray[i+1].cleanWord === s2) {
+                    updatePosition(i + 1);
+                    return; // Achou par de palavras, sai
+                }
+            }
+        }
+
+        // 3. TENTATIVA FRACA: Palavra única (Só aceita se for palavra longa)
+        const lastSpoken = cleanSpoken[cleanSpoken.length - 1];
+        
+        // Só avança por palavra única se ela tiver mais de 3 letras
+        // Isso evita pular em "de", "que", "para", "com" que são muito comuns
+        if (lastSpoken && lastSpoken.length > 3) {
+            for (let i = currentIndex; i < limit; i++) {
+                if (wordsArray[i].cleanWord === lastSpoken) {
+                    updatePosition(i);
+                    return;
+                }
             }
         }
     }
